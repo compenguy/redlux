@@ -260,3 +260,5 @@ where
     return self.total_duration();
   }
 }
+#[cfg(feature = "rodio")]
+pub use rodio;
