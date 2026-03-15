@@ -1,5 +1,5 @@
 use redlux::Decoder;
-use rodio::{OutputStream, Sink};
+use rodio::{DeviceSinkBuilder, Player};
 use std::fs::File;
 use std::io::BufReader;
 use std::thread;
@@ -16,14 +16,12 @@ fn play_m4a() {
 
   let decoder = Decoder::new_mpeg4(buf, size).expect("Error creating M4aDecoder");
 
-  let output_stream = OutputStream::try_default();
-  let (_stream, handle) = output_stream.expect("Error creating output stream");
-  let sink = Sink::try_new(&handle).expect("Error creating sink");
+  let handle = DeviceSinkBuilder::open_default_sink().expect("Error creating output stream");
+  let player = Player::connect_new(&handle.mixer());
 
-  sink.append(decoder);
-  sink.play();
+  player.append(decoder);
+  player.set_volume(0.0);
   // play audio for 200ms at 0.0 volume
-  sink.set_volume(0.0);
   thread::sleep(Duration::from_millis(200));
 }
 
@@ -34,13 +32,11 @@ fn play_aac() {
   let buf = BufReader::new(file);
   let decoder = Decoder::new_aac(buf);
 
-  let output_stream = OutputStream::try_default();
-  let (_stream, handle) = output_stream.expect("Error creating output stream");
-  let sink = Sink::try_new(&handle).expect("Error creating sink");
+  let handle = DeviceSinkBuilder::open_default_sink().expect("Error creating output stream");
+  let player = Player::connect_new(&handle.mixer());
 
-  sink.append(decoder);
-  sink.play();
+  player.append(decoder);
+  player.set_volume(0.0);
   // play audio for 200ms at 0.0 volume
-  sink.set_volume(0.0);
   thread::sleep(Duration::from_millis(200));
 }

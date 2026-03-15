@@ -1,5 +1,5 @@
 use redlux::Decoder;
-use rodio::{OutputStream, Sink};
+use rodio::{DeviceSinkBuilder, Player};
 use std::fs::File;
 use std::io::BufReader;
 
@@ -10,12 +10,10 @@ fn main() {
 
   let decoder = Decoder::new_aac(buf);
 
-  let output_stream = OutputStream::try_default();
-  let (_stream, handle) = output_stream.expect("Error creating output stream");
-  let sink = Sink::try_new(&handle).expect("Error creating sink");
+  let handle = DeviceSinkBuilder::open_default_sink().expect("Error creating output stream");
+  let player = Player::connect_new(&handle.mixer());
 
-  sink.append(decoder);
-  sink.play();
-  sink.set_volume(0.25);
-  sink.sleep_until_end();
+  player.append(decoder);
+  player.set_volume(0.25);
+  player.sleep_until_end();
 }

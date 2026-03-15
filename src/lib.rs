@@ -5,6 +5,9 @@ use std::io::{Read, Seek};
 use std::time::Duration;
 use std::{error, fmt, io};
 
+#[cfg(feature = "rodio")]
+use std::num::{NonZeroU16, NonZeroU32};
+
 pub mod adts;
 
 /// Redlux error
@@ -56,6 +59,7 @@ pub enum Format {
 }
 
 /// Underlying reader
+#[allow(clippy::large_enum_variant)]
 pub enum Reader<R> {
   Mp4Reader(mp4::Mp4Reader<R>),
   AacReader(R),
@@ -84,18 +88,17 @@ where
   /// Create from an aac buffer
   pub fn new_aac(reader: R) -> Self {
     let aac_decoder = AacDecoder::new(Transport::Adts);
-    let aac_decoder = Decoder {
+    Decoder {
       format: Format::Aac,
       reader: Reader::AacReader(reader),
-      aac_decoder: aac_decoder,
+      aac_decoder,
       bytes: Vec::new(),
       current_pcm_index: 0,
       current_pcm: Vec::new(),
       track_id: 0,
       position: 1,
       iter_error: None,
-    };
-    return aac_decoder;
+    }
   }
   /// Create from an mpeg buffer
   pub fn new_mpeg4(reader: R, size: u64) -> Result<Self, Error> {
@@ -108,32 +111,25 @@ where
           Ok(media_type) => media_type,
           Err(_) => continue,
         };
-        match media_type {
-          mp4::MediaType::AAC => {
-            track_id = Some(track.track_id());
-            break;
-          }
-          _ => {}
+        if media_type == mp4::MediaType::AAC {
+          track_id = Some(track.track_id());
+          break;
         }
       }
     }
     match track_id {
-      Some(track_id) => {
-        return Ok(Decoder {
-          format: Format::Mp4,
-          reader: Reader::Mp4Reader(mp4),
-          aac_decoder: aac_decoder,
-          bytes: Vec::new(),
-          current_pcm_index: 0,
-          current_pcm: Vec::new(),
-          track_id: track_id,
-          position: 1,
-          iter_error: None,
-        });
-      }
-      None => {
-        return Err(Error::TrackNotFound);
-      }
+      Some(track_id) => Ok(Decoder {
+        format: Format::Mp4,
+        reader: Reader::Mp4Reader(mp4),
+        aac_decoder,
+        bytes: Vec::new(),
+        current_pcm_index: 0,
+        current_pcm: Vec::new(),
+        track_id,
+        position: 1,
+        iter_error: None,
+      }),
+      None => Err(Error::TrackNotFound),
     }
   }
   pub fn current_frame_len(&self) -> Option<usize> {
@@ -149,7 +145,7 @@ where
     sample_rate as _
   }
   pub fn total_duration(&self) -> Option<Duration> {
-    return None;
+    None
   }
   /// Consume and return the next sample, or None when finished
   pub fn decode_next_sample(&mut self) -> Result<Option<i16>, Error> {
@@ -219,7 +215,7 @@ where
     }
     let value = self.current_pcm[self.current_pcm_index];
     self.current_pcm_index += 1;
-    return Ok(Some(value));
+    Ok(Some(value))
   }
 }
 
@@ -227,16 +223,17 @@ impl<R> Iterator for Decoder<R>
 where
   R: Read + Seek,
 {
-  type Item = i16;
-  /// Runs decode_next_sample and returns the sample from that. Once the
-  /// iterator is finished, it returns None. If there's an error, it's added
-  /// to the iter_error error.
-  fn next(&mut self) -> Option<i16> {
+  type Item = f32;
+  /// Runs decode_next_sample and returns the sample as `f32` in [-1.0, 1.0].
+  /// Once the iterator is finished, returns None. If there's an error, it's
+  /// stored in `iter_error`.
+  fn next(&mut self) -> Option<f32> {
     match self.decode_next_sample() {
-      Ok(sample) => sample,
+      Ok(Some(s)) => Some(s as f32 / 32768.0),
+      Ok(None) => None,
       Err(err) => {
         self.iter_error = Some(err);
-        return None;
+        None
       }
     }
   }
@@ -247,18 +244,19 @@ impl<R> rodio::Source for Decoder<R>
 where
   R: Read + Seek,
 {
-  fn current_frame_len(&self) -> Option<usize> {
-    return self.current_frame_len();
+  fn current_span_len(&self) -> Option<usize> {
+    self.current_frame_len()
   }
-  fn channels(&self) -> u16 {
-    return self.channels();
+  fn channels(&self) -> NonZeroU16 {
+    NonZeroU16::new(self.channels()).unwrap_or(NonZeroU16::MIN)
   }
-  fn sample_rate(&self) -> u32 {
-    return self.sample_rate();
+  fn sample_rate(&self) -> NonZeroU32 {
+    NonZeroU32::new(self.sample_rate()).unwrap_or(NonZeroU32::MIN)
   }
   fn total_duration(&self) -> Option<Duration> {
-    return self.total_duration();
+    self.total_duration()
   }
 }
+
 #[cfg(feature = "rodio")]
 pub use rodio;

@@ -1,21 +1,24 @@
+use crate::Error;
 use mp4::{AudioObjectType, ChannelConfig, Mp4Sample, SampleFreqIndex};
 use std::ops::Range;
-use crate::Error;
 
+#[allow(clippy::let_and_return)]
 fn get_bits(byte: u16, range: Range<u16>) -> u16 {
-  let shaved_left = byte << range.start - 1;
-  let moved_back = shaved_left >> range.start - 1;
-  let shave_right = moved_back >> 16 - range.end;
-  return shave_right;
+  let shaved_left = byte << (range.start - 1);
+  let moved_back = shaved_left >> (range.start - 1);
+  let shave_right = moved_back >> (16 - range.end);
+  shave_right
 }
 
+#[allow(clippy::let_and_return)]
 fn get_bits_u8(byte: u8, range: Range<u8>) -> u8 {
-  let shaved_left = byte << range.start - 1;
-  let moved_back = shaved_left >> range.start - 1;
-  let shave_right = moved_back >> 8 - range.end;
-  return shave_right;
+  let shaved_left = byte << (range.start - 1);
+  let moved_back = shaved_left >> (range.start - 1);
+  let shave_right = moved_back >> (8 - range.end);
+  shave_right
 }
 
+#[allow(clippy::identity_op)]
 pub fn construct_adts_header(
   object_type: AudioObjectType,
   sample_freq_index: SampleFreqIndex,
@@ -42,7 +45,7 @@ pub fn construct_adts_header(
     // The decoder will have to detect SBR/PS. This is called "Implicit
     // Signaling" and it's the only option for ADTS.
     AudioObjectType::SpectralBandReplication => 2, // SBR, needed to support HE-AAC v1
-    AudioObjectType::ParametricStereo => 2, // PS, needed to support HE-AAC v2
+    AudioObjectType::ParametricStereo => 2,        // PS, needed to support HE-AAC v2
     aot => return Err(Error::UnsupportedObjectType(aot)),
   };
   let adts_object_type = object_type - 1;
@@ -102,5 +105,5 @@ pub fn construct_adts_header(
   byte6 = (byte6 << 6) | 0b111111; // OOOOOO
   byte6 = (byte6 << 2) | 0b00; // PP
 
-  return Ok(vec![byte0, byte1, byte2, byte3, byte4, byte5, byte6])
+  Ok(vec![byte0, byte1, byte2, byte3, byte4, byte5, byte6])
 }
